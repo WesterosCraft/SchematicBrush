@@ -97,82 +97,83 @@ public class SCHBRCommand {
    */
 	public static void register(SchematicBrush mod, CommandDispatcher<CommandSourceStack> source) {
 		sb = mod;
+    SchematicSuggestionProvider suggestedSchematics = new SchematicSuggestionProvider(sb, true);
 		SchematicBrush.log.info("Register schbr");
 
     source.register(Commands.literal("schbr")
-      .then(Commands.argument("args", StringArgumentType.greedyString())
+      .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
         .executes(ctx -> schBr(false, false, 0, null,
                                StringArgumentType.getString(ctx, "args"), ctx.getSource())))
       .then(Commands.literal("-incair")
-        .then(Commands.argument("args", StringArgumentType.greedyString())
+        .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
           .executes(ctx -> schBr(true, false, 0, null,
                                  StringArgumentType.getString(ctx, "args"), ctx.getSource())))
         .then(Commands.literal("-replaceall")
-          .then(Commands.argument("args", StringArgumentType.greedyString())
+          .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
             .executes(ctx -> schBr(true, true, 0, null,
                                    StringArgumentType.getString(ctx, "args"), ctx.getSource())))
           .then(Commands.literal("-yoff")
             .then(Commands.argument("yoff", IntegerArgumentType.integer())
-              .then(Commands.argument("args", StringArgumentType.greedyString())
+              .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
                 .executes(ctx -> schBr(true, true, IntegerArgumentType.getInteger(ctx, "yoff"), null,
                                        StringArgumentType.getString(ctx, "args"), ctx.getSource())))
               .then(Commands.literal("-place")
                 .then(Commands.argument("place", StringArgumentType.word())
-                  .then(Commands.argument("args", StringArgumentType.greedyString())
+                  .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
                     .executes(ctx -> schBr(true, true, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
                                            StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
           .then(Commands.literal("-place")
             .then(Commands.argument("place", StringArgumentType.word())
-              .then(Commands.argument("args", StringArgumentType.greedyString())
+              .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
                 .executes(ctx -> schBr(true, true, 0, StringArgumentType.getString(ctx, "place"),
                                        StringArgumentType.getString(ctx, "args"), ctx.getSource()))))))
         .then(Commands.literal("-yoff")
           .then(Commands.argument("yoff", IntegerArgumentType.integer())
-            .then(Commands.argument("args", StringArgumentType.greedyString())
+            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
               .executes(ctx -> schBr(true, false, IntegerArgumentType.getInteger(ctx, "yoff"), null,
                                      StringArgumentType.getString(ctx, "args"), ctx.getSource())))
             .then(Commands.literal("-place")
               .then(Commands.argument("place", StringArgumentType.word())
-                .then(Commands.argument("args", StringArgumentType.greedyString())
+                .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
                   .executes(ctx -> schBr(true, false, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
                                          StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
         .then(Commands.literal("-place")
           .then(Commands.argument("place", StringArgumentType.word())
-            .then(Commands.argument("args", StringArgumentType.greedyString())
+            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
               .executes(ctx -> schBr(true, false, 0, StringArgumentType.getString(ctx, "place"),
                                      StringArgumentType.getString(ctx, "args"), ctx.getSource()))))))
       .then(Commands.literal("-replaceall")
-        .then(Commands.argument("args", StringArgumentType.greedyString())
+        .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
           .executes(ctx -> schBr(false, true, 0, null,
                                  StringArgumentType.getString(ctx, "args"), ctx.getSource())))
         .then(Commands.literal("-yoff")
           .then(Commands.argument("yoff", IntegerArgumentType.integer())
-            .then(Commands.argument("args", StringArgumentType.greedyString())
+            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
               .executes(ctx -> schBr(false, true, IntegerArgumentType.getInteger(ctx, "yoff"), null,
                                      StringArgumentType.getString(ctx, "args"), ctx.getSource())))
             .then(Commands.literal("-place")
               .then(Commands.argument("place", StringArgumentType.word())
-                .then(Commands.argument("args", StringArgumentType.greedyString())
+                .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
                   .executes(ctx -> schBr(false, true, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
                                          StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
         .then(Commands.literal("-place")
           .then(Commands.argument("place", StringArgumentType.word())
-            .then(Commands.argument("args", StringArgumentType.greedyString())
+            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
               .executes(ctx -> schBr(false, true, 0, StringArgumentType.getString(ctx, "place"),
                                      StringArgumentType.getString(ctx, "args"), ctx.getSource()))))))
       .then(Commands.literal("-yoff")
         .then(Commands.argument("yoff", IntegerArgumentType.integer())
-          .then(Commands.argument("args", StringArgumentType.greedyString())
+          .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
             .executes(ctx -> schBr(false, false, IntegerArgumentType.getInteger(ctx, "yoff"), null,
                                    StringArgumentType.getString(ctx, "args"), ctx.getSource())))
           .then(Commands.literal("-place")
             .then(Commands.argument("place", StringArgumentType.word())
-              .then(Commands.argument("args", StringArgumentType.greedyString())
+              .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
                 .executes(ctx -> schBr(false, false, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
                                        StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
       .then(Commands.literal("-place")
         .then(Commands.argument("place", StringArgumentType.word())
-          .then(Commands.argument("args", StringArgumentType.greedyString())
+          .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
             .executes(ctx -> schBr(false, false, 0, StringArgumentType.getString(ctx, "place"),
                                    StringArgumentType.getString(ctx, "args"), ctx.getSource()))))));
 	}

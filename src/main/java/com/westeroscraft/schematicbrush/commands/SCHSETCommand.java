@@ -67,7 +67,9 @@ public class SCHSETCommand {
 	
 	public static void register(SchematicBrush mod, CommandDispatcher<CommandSourceStack> source) {
 		sb = mod;
+    SchematicSuggestionProvider suggestedSchematics = new SchematicSuggestionProvider(sb);
 		SchematicBrush.log.info("Register schset");
+
     source.register(Commands.literal("schset")
       .then(Commands.literal("list")
         .executes(ctx -> schSetList(null, ctx.getSource()))
@@ -80,31 +82,31 @@ public class SCHSETCommand {
             .executes(ctx -> schSetCreate(StringArgumentType.getString(ctx, "setid"),
                                           StringArgumentType.getString(ctx, "schems"), ctx.getSource())))))
       .then(Commands.literal("delete")
-        .then(Commands.argument("setid", StringArgumentType.word())
+        .then(Commands.argument("setid", StringArgumentType.word()).suggests(suggestedSchematics)
           .executes(ctx -> schSetDelete(StringArgumentType.getString(ctx, "setid"), ctx.getSource()))))
       .then(Commands.literal("append")
-        .then(Commands.argument("setid", StringArgumentType.word())
+        .then(Commands.argument("setid", StringArgumentType.word()).suggests(suggestedSchematics)
           .then(Commands.argument("schems", StringArgumentType.greedyString())
             .executes(ctx -> schSetAppend(StringArgumentType.getString(ctx, "setid"),
                                           StringArgumentType.getString(ctx, "schems"), ctx.getSource())))))
       .then(Commands.literal("remove")
-        .then(Commands.argument("setid", StringArgumentType.word())
+        .then(Commands.argument("setid", StringArgumentType.word()).suggests(suggestedSchematics)
           .then(Commands.argument("schems", StringArgumentType.greedyString())
             .executes(ctx -> schSetRemove(StringArgumentType.getString(ctx, "setid"),
                                           StringArgumentType.getString(ctx, "schems"), false, ctx.getSource()))))
         .then(Commands.literal("-exact")
-          .then(Commands.argument("setid", StringArgumentType.word())
+          .then(Commands.argument("setid", StringArgumentType.word()).suggests(suggestedSchematics)
             .then(Commands.argument("schems", StringArgumentType.greedyString())
               .executes(ctx -> schSetRemove(StringArgumentType.getString(ctx, "setid"),
                                             StringArgumentType.getString(ctx, "schems"), true, ctx.getSource()))))))
       .then(Commands.literal("setdesc")
-        .then(Commands.argument("setid", StringArgumentType.word())
+        .then(Commands.argument("setid", StringArgumentType.word()).suggests(suggestedSchematics)
           .then(Commands.argument("desc", StringArgumentType.string())
             .executes(ctx -> schSetSetDesc(StringArgumentType.getString(ctx, "setid"),
                                            StringArgumentType.getString(ctx, "desc"), ctx.getSource())))))
       .then(Commands.literal("get")
-        .then(Commands.argument("setid", StringArgumentType.word())
-          .executes(ctx -> schSetGet(StringArgumentType.getString(ctx, "setid"), ctx.getSource())))));
+        .then(Commands.argument("setid", StringArgumentType.word()).suggests(suggestedSchematics)
+            .executes(ctx -> schSetGet(StringArgumentType.getString(ctx, "setid"), ctx.getSource())))));
 	}
 
   /*
