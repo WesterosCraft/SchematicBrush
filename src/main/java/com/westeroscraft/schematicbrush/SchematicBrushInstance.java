@@ -1,33 +1,27 @@
 package com.westeroscraft.schematicbrush;
 
-import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.MaxChangedBlocksException;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.math.transform.AffineTransform;
 import com.sk89q.worldedit.util.Direction;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
-import com.sk89q.worldedit.command.tool.BrushTool;
-import com.sk89q.worldedit.command.tool.InvalidToolBindException;
 import com.sk89q.worldedit.command.tool.brush.Brush;
 import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.EmptyClipboardException;
-import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
-import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
-import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.session.ClipboardHolder;
 import com.sk89q.worldedit.session.PasteBuilder;
 import com.sk89q.worldedit.entity.Player;
-import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.function.pattern.Pattern;
 import com.sk89q.worldedit.function.mask.BlockTypeMask;
 import com.sk89q.worldedit.function.operation.Operations;
-import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockTypes;
 
-import static com.westeroscraft.schematicbrush.SchematicDef.*;
+import com.westeroscraft.schematicbrush.SchematicDef.Flip;
+import com.westeroscraft.schematicbrush.SchematicDef.Placement;
+import com.westeroscraft.schematicbrush.SchematicDef.Rotation;
 
 public class SchematicBrushInstance implements Brush {
   public SchematicSet set;
@@ -51,11 +45,8 @@ public class SchematicBrushInstance implements Brush {
 		return trans.scale(dir.toVector().abs().multiply(-2).add(1, 1, 1));
 	}
 
-	private AffineTransform doOffset(AffineTransform trans, BlockVector3 off) {
-		return trans.translate(off.multiply(-1));
-	}
-
   @Override
+  @SuppressWarnings("static-access")
   public void build(EditSession editsession, BlockVector3 pos, Pattern mat, double size) throws MaxChangedBlocksException {
     SchematicDef def = set.getRandomSchematic(); // Pick schematic from set
     if (def == null)
@@ -102,12 +93,12 @@ public class SchematicBrushInstance implements Brush {
     // And apply clipboard to edit session
     BlockVector3 ppos;
     if (place == Placement.DROP) {
-      ppos = BlockVector3.at(centerOffset.getX(), -def.offset - yoff - minY[0] + 1, centerOffset.getZ());
+      ppos = BlockVector3.at(centerOffset.x(), -def.offset - yoff - minY[0] + 1, centerOffset.z());
     } else if (place == Placement.BOTTOM) {
-      ppos = BlockVector3.at(centerOffset.getX(), -def.offset - yoff + 1, centerOffset.getZ());
+      ppos = BlockVector3.at(centerOffset.x(), -def.offset - yoff + 1, centerOffset.z());
     } else { // Else, default is CENTER (same as clipboard brush
-      ppos = BlockVector3.at(centerOffset.getX(), centerOffset.getY() - def.offset - yoff + 1,
-          centerOffset.getZ());
+      ppos = BlockVector3.at(centerOffset.x(), centerOffset.y() - def.offset - yoff + 1,
+          centerOffset.z());
     }
     ppos = trans.apply(ppos.toVector3()).toBlockPoint();
     ppos = pos.subtract(ppos);

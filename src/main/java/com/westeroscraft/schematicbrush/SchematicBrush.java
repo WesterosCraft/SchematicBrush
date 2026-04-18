@@ -1,66 +1,38 @@
 package com.westeroscraft.schematicbrush;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.CrashReport;
-import net.minecraft.ReportedException;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.TickEvent.ServerTickEvent;
-import net.minecraftforge.event.server.ServerStartingEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.fml.IExtensionPoint;
-import net.minecraftforge.fml.ModContainer;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraftforge.fml.loading.FMLPaths;
-import net.minecraftforge.network.NetworkConstants;
 
-import com.mojang.brigadier.CommandDispatcher;
+import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 
-import com.sk89q.worldedit.EditSession;
-import com.sk89q.worldedit.LocalSession;
-import com.sk89q.worldedit.MaxChangedBlocksException;
 import com.sk89q.worldedit.WorldEdit;
-import com.sk89q.worldedit.command.tool.brush.Brush;
-import com.sk89q.worldedit.entity.Player;
+import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
-import com.sk89q.worldedit.forge.ForgeAdapter;
-import com.sk89q.worldedit.forge.ForgePlayer;
-import com.sk89q.worldedit.forge.ForgeWorldEdit;
-import com.sk89q.worldedit.function.mask.BlockMask;
-import com.sk89q.worldedit.function.mask.Mask;
-import com.sk89q.worldedit.function.operation.Operations;
+import com.sk89q.worldedit.fabric.FabricAdapter;
+import com.sk89q.worldedit.fabric.FabricWorldEdit;
 import com.sk89q.worldedit.math.BlockVector3;
-import com.sk89q.worldedit.math.Vector3;
-import com.sk89q.worldedit.math.transform.AffineTransform;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.session.ClipboardHolder;
-import com.sk89q.worldedit.util.Direction;
+import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.io.Closer;
 import com.sk89q.worldedit.util.io.file.FilenameException;
-import com.sk89q.worldedit.world.block.BaseBlock;
-import com.sk89q.worldedit.world.block.BlockTypes;
 
-import com.westeroscraft.schematicbrush.commands.SCHMIGRATECommand;
 import com.westeroscraft.schematicbrush.commands.SCHBRCommand;
 import com.westeroscraft.schematicbrush.commands.SCHSETCommand;
 import com.westeroscraft.schematicbrush.commands.SCHLISTCommand;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -80,8 +52,6 @@ import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -93,22 +63,17 @@ import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-// The value here should match an entry in the META-INF/mods.toml file
-@Mod(SchematicBrush.MOD_ID)
-public class SchematicBrush {
+public class SchematicBrush implements ModInitializer {
 	public static final String MOD_ID = "schematicbrush";
 
-	// Directly reference a log4j logger.
-	public static final Logger log = LogManager.getLogger();
-
-	// Says where the client and server 'proxy' code is loaded.
-	public static Proxy proxy = DistExecutor.safeRunForDist(() -> ClientProxy::new, () -> Proxy::new);
+	// Directly reference a slf4j logger.
+	public static final Logger log = LoggerFactory.getLogger(MOD_ID);
 
 	public static Path modConfigDir;
 	public static String modConfigFilename;
 
 	public static ModContainer we;
-	public static ForgeWorldEdit wep;
+	public static FabricWorldEdit wep;
 	public static WorldEdit worldEdit;
 
 	public static final String SCHEMATIC_EXT = "schem";
@@ -120,14 +85,16 @@ public class SchematicBrush {
 
 	public SchematicBrushConfig config;
 	public HashMap<String, SchematicSet> sets = new HashMap<String, SchematicSet>();
-	   
-	public SchematicBrush() {
-		// Register ourselves for server and other game events we are interested in
-		MinecraftForge.EVENT_BUS.register(this);
 
+	private boolean ticking;
+	private int ticks = 0;
+	private List<Callable<Boolean>> pending = new ArrayList<Callable<Boolean>>();
+
+	@Override
+	public void onInitialize() {
 		// Create the config folder
-		Path configPath = FMLPaths.CONFIGDIR.get();
-		modConfigDir = Paths.get(configPath.toAbsolutePath().toString(), MOD_ID);
+		Path configPath = FabricLoader.getInstance().getConfigDir();
+		modConfigDir = configPath.resolve(MOD_ID);
 		try {
 			Files.createDirectory(modConfigDir);
 		} catch (FileAlreadyExistsException e) {
@@ -135,94 +102,75 @@ public class SchematicBrush {
 		} catch (IOException e) {
 			log.error("Failed to create schematicbrush config directory", e);
 		}
-		modConfigFilename = modConfigDir + "/schembrush.json";
+		modConfigFilename = modConfigDir.resolve("schembrush.json").toString();
+
+		// Register ourselves for server and other game events we are interested in
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+			// SCHMIGRATECommand.register(this, dispatcher);
+			SCHBRCommand.register(this, dispatcher);
+			SCHSETCommand.register(this, dispatcher);
+			SCHLISTCommand.register(this, dispatcher);
+		});
+
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			if (!ticking) return;
+			ticks++;
+			if (ticks >= 5) {
+				Iterator<Callable<Boolean>> iter = pending.iterator();
+				while (iter.hasNext()) {
+					Callable<Boolean> r = iter.next();
+					Boolean rslt;
+					try {
+						rslt = r.call();
+					} catch (Exception x) {
+						rslt = Boolean.FALSE;
+					}
+					if (!rslt) {
+						iter.remove();
+					}
+				}
+				if (pending.size() == 0)
+					ticking = false;
+				ticks = 0;
+			}
+		});
+
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+			Optional<ModContainer> ourMod = FabricLoader.getInstance().getModContainer(MOD_ID);
+			log.info("SchematicBrush v" + ourMod.map(mc -> mc.getMetadata().getVersion().toString()).orElse("unknown") + " loaded");
+
+			Optional<ModContainer> worldedit = FabricLoader.getInstance().getModContainer("worldedit");
+			if (!worldedit.isPresent()) {
+					log.error("WorldEdit not found!!");
+				return;
+			}
+			we = worldedit.get();
+			wep = FabricWorldEdit.inst;
+			worldEdit = WorldEdit.getInstance();
+			log.info("Found worldedit " + we.getMetadata().getVersion());
+
+			// Load existing schematics
+			try {
+				config = loadConfig(modConfigFilename);
+			} catch (ConfigNotFoundException | JsonSyntaxException | JsonIOException ex) {
+				log.warn("schembrush.json missing or could not be read; overwriting with new config.");
+				config = new SchematicBrushConfig();
+				saveSchematicSets(config, modConfigFilename);
+			}
+			loadSchematicSets(config);
+			log.info("Schemsets initialized");
+
+			// Disable cache
+			treecache = null;
+		});
+
+		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+		});
 	}
 
-	private boolean ticking;
-	private int ticks = 0;
-	private List<Callable<Boolean>> pending = new ArrayList<Callable<Boolean>>();
-	
 	public void addJob(Callable<Boolean> job) {
 		pending.add(job);
 		ticking = true;
-	}
-	@SubscribeEvent
-	public void countTicks(ServerTickEvent event) {
-		if ((!ticking) || (event.phase != TickEvent.Phase.END))
-			return;
-		
-		ticks++;
-		if (ticks >= 5) {
-			Iterator<Callable<Boolean>> iter = pending.iterator();
-			while (iter.hasNext()) {
-				Callable<Boolean> r = iter.next();
-				Boolean rslt;
-				try {
-					rslt = r.call();
-				} catch (Exception x) {
-					rslt = Boolean.FALSE;
-				}
-				if (!rslt) {
-					iter.remove();
-				}
-			}
-			if (pending.size() == 0)
-				ticking = false;
-			
-			ticks = 0;
-		}
-	}
-	
-	@SubscribeEvent
-	public void onRegisterCommandEvent(RegisterCommandsEvent event) {
-		CommandDispatcher<CommandSourceStack> commandDispatcher = event.getDispatcher();
-		// SCHMIGRATECommand.register(this, commandDispatcher);
-		SCHBRCommand.register(this, commandDispatcher);
-		SCHSETCommand.register(this, commandDispatcher);
-		SCHLISTCommand.register(this, commandDispatcher);
-	}
-
-	@SubscribeEvent
-	public void serverStopping(ServerStoppingEvent event) {
-		
-	}
-	
-	public static void crash(Exception x, String msg) {
-		throw new ReportedException(new CrashReport(msg, x));
-	}
-
-	public static void crash(String msg) {
-		crash(new Exception(), msg);
-	}
-
-	@SubscribeEvent
-	public void onServerStartingEvent(ServerStartingEvent event) {
-		ModContainer ourMod = ModList.get().getModContainerById(MOD_ID).get();
-		log.info("SchematicBrush v" + ourMod.getModInfo().getVersion() + " loaded");
-
-		Optional<? extends ModContainer> worldedit = ModList.get().getModContainerById("worldedit");
-		if (!worldedit.isPresent()) {
-				log.error("WorldEdit not found!!");
-			return;
-		}
-		we = worldedit.get();
-		wep = (ForgeWorldEdit) we.getMod();        
-		worldEdit = WorldEdit.getInstance();
-		log.info("Found worldedit " + we.getModInfo().getVersion());
-
-		// Load existing schematics
-		try {
-			config = loadConfig(modConfigFilename);
-		} catch (ConfigNotFoundException | JsonSyntaxException | JsonIOException ex) {
-			log.warn("schembrush.json missing or could not be read; overwriting with new config.");
-			config = new SchematicBrushConfig();
-			saveSchematicSets(config, modConfigFilename);
-		}
-		loadSchematicSets(config);
-		log.info("Schemsets initialized");
-
-		// Disable cache
-		treecache = null;
 	}
 
 	public File getSchemDirectory() {
@@ -232,6 +180,7 @@ public class SchematicBrush {
 	private static class ConfigNotFoundException extends Exception {
 		public ConfigNotFoundException() {
 		}
+		@SuppressWarnings("unused")
 		public ConfigNotFoundException(String message) {
 			super(message);
 		}
@@ -367,7 +316,7 @@ public class SchematicBrush {
 				treecache.put(dir, flist);
 			}
 		}
-		
+
 		// Select all matching files
 		for (String fn : flist) {
 			if (p.matcher(fn).matches()) {
@@ -398,7 +347,7 @@ public class SchematicBrush {
 					return null;
 				}
 			} catch (PatternSyntaxException x) {
-				player.printError("Invalid filename pattern - " + fname + " - " + x.getMessage());
+				player.printError(TextComponent.of("Invalid filename pattern - " + fname + " - " + x.getMessage()));
 				return null;
 			}
 		}
@@ -433,12 +382,12 @@ public class SchematicBrush {
 	public String loadSchematicIntoClipboard(Actor player, LocalSession sess, String fname, int[] bottomY) {
 		File dir = getSchemDirectory();
 		if (dir == null) {
-			player.printError("Schematic directory for '" + fname + "' missing");
+			player.printError(TextComponent.of("Schematic directory for '" + fname + "' missing"));
 			return null;
 		}
 		String name = resolveName(player, dir, fname, SCHEMATIC_EXT);
 		if (name == null) {
-			player.printError("Schematic '" + fname + "' file not found");
+			player.printError(TextComponent.of("Schematic '" + fname + "' file not found"));
 			return null;
 		}
 		File f;
@@ -447,18 +396,18 @@ public class SchematicBrush {
 		try {
 			f = worldEdit.getSafeOpenFile(null, dir, name, SCHEMATIC_EXT);
 			if (!f.exists()) {
-				player.printError("Schematic '" + name + "' file not found");
+				player.printError(TextComponent.of("Schematic '" + name + "' file not found"));
 				return null;
 			}
 
 			ClipboardFormat fmt = ClipboardFormats.findByFile(f);
 
 			if (fmt == null) {
-				player.printError("Schematic '" + name + "' format not found");
+				player.printError(TextComponent.of("Schematic '" + name + "' format not found"));
 				return null;
 			}
 			if (!fmt.isFormat(f)) {
-				player.printError("Schematic '" + name + "' is not correct format (" + fmt + ")");
+				player.printError(TextComponent.of("Schematic '" + name + "' is not correct format (" + fmt + ")"));
 				return null;
 			}
 			String filePath = f.getCanonicalPath();
@@ -492,9 +441,9 @@ public class SchematicBrush {
 			}
 
 		} catch (FilenameException e1) {
-			player.printError(e1.getMessage());
+			player.printError(TextComponent.of(e1.getMessage()));
 		} catch (IOException e) {
-			player.printError("Error reading schematic '" + name + "' - " + e.getMessage());
+			player.printError(TextComponent.of("Error reading schematic '" + name + "' - " + e.getMessage()));
 		} finally {
 			try {
 				closer.close();
@@ -505,28 +454,28 @@ public class SchematicBrush {
 		return (rslt) ? name : null;
 	}
 
-	/* 
+	/*
 	 * Validate that actor is server player and has permissions; otherwise return null.
 	 */
 	public static Actor validateActor(CommandSourceStack source, String permissionGroup) {
 		if (source.getEntity() instanceof ServerPlayer) {
 			ServerPlayer player = (ServerPlayer) source.getEntity();
-      Actor actor = ForgeAdapter.adaptPlayer(player);
+      Actor actor = FabricAdapter.adaptPlayer(player);
 
 			// Test for command access
 			if ((permissionGroup != null) && !actor.hasPermission(permissionGroup)) {
-        source.sendFailure(new TextComponent("You do not have access to this command"));
+        source.sendFailure(Component.literal("You do not have access to this command"));
         return null;
 			}
 
 			return actor;
 
 		} else {
-			source.sendFailure(new TextComponent("Only usable by server player"));
+			source.sendFailure(Component.literal("Only usable by server player"));
 			return null;
 		}
 	}
-	
+
 	public static void debugLog(String msg) {
 		log.info(msg);
 	}

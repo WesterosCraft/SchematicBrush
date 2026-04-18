@@ -21,42 +21,37 @@ import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.LocalConfiguration;
 import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.extension.platform.Actor;
-import com.sk89q.worldedit.extension.platform.permission.ActorSelectorLimits;
 import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard;
-import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardWriter;
 import com.sk89q.worldedit.session.ClipboardHolder;
+import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.formatting.text.TranslatableComponent;
 import com.sk89q.worldedit.util.io.Closer;
 import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.westeroscraft.schematicbrush.SchematicBrush;
-import com.sk89q.worldedit.forge.ForgeAdapter;
+import com.sk89q.worldedit.fabric.FabricAdapter;
 import com.sk89q.worldedit.function.operation.ForwardExtentCopy;
-import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
-import com.sk89q.worldedit.math.transform.Transform;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.regions.RegionSelector;
 import com.sk89q.worldedit.regions.selector.limit.PermissiveSelectorLimits;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.ChunkStatus;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 
 public class SCHMIGRATECommand {
 	private static SchematicBrush sb;
-	
+
 	public static void register(SchematicBrush mod, CommandDispatcher<CommandSourceStack> source) {
 		sb = mod;
 		SchematicBrush.log.info("Register schmigrate");
@@ -73,16 +68,16 @@ public class SCHMIGRATECommand {
 		int maxX, maxY, maxZ;
 		public String toString() {
 			return String.format("%s: origin=%d:%d:%d, min=%d:%d:%d, max=%d:%d:%d", fname, originX, originY, originZ,
-				minX, minY, minZ, maxX, maxY, maxZ);					
+				minX, minY, minZ, maxX, maxY, maxZ);
 		}
 	};
-	
+
     private static List<String> getMatchingFiles(File dir, Pattern p) {
         ArrayList<String> matches = new ArrayList<String>();
         getMatchingFiles(matches, dir, p, null);
         return matches;
     }
-    
+
     private static void buildTree(File dir, List<String> rslt, String path) {
     	File[] lst = dir.listFiles();
     	for (File f : lst) {
@@ -95,7 +90,7 @@ public class SCHMIGRATECommand {
     		}
     	}
     }
-    
+
     private static void getMatchingFiles(List<String> rslt, File dir, final Pattern p, final String path) {
     	List<String> flist = null;
     	if (flist == null) {
@@ -115,7 +110,7 @@ public class SCHMIGRATECommand {
 			// Read schapplyall.txt
 			File logf = new File("schapplyall.txt");
 			if (!logf.canRead()) {
-				source.sendFailure(new TextComponent("Cannot find schapplyall.txt"));
+				source.sendFailure(Component.literal("Cannot find schapplyall.txt"));
 				return 1;
 			}
 			List<SchRecord> list = new ArrayList<SchRecord>();
@@ -146,10 +141,10 @@ public class SCHMIGRATECommand {
 						rec.maxZ = Integer.parseInt(max[2]);
 						list.add(rec);
 						//SchematicBrush.log.info(rec);
-					}					
+					}
 				}
 				SchematicBrush.log.info(String.format("Loaded %d schematic records", list.size()));
-				
+
 				LocalConfiguration config = SchematicBrush.worldEdit.getConfiguration();
 		        File dir = SchematicBrush.worldEdit.getWorkingDirectoryPath(config.saveDir).toFile();
 	    		final Pattern p = Pattern.compile(".*\\.schem");
@@ -161,28 +156,28 @@ public class SCHMIGRATECommand {
 	    			String s = v.substring(0, v.lastIndexOf('.'));
 	    			fset.add(s);
 	    		}
-	    		
+
 				ApplyAllJob job = new ApplyAllJob();
 				job.recs = list;
 				job.existing = fset;
 				job.player = player;
-				job.level = player.getLevel();
-				job.actor = ForgeAdapter.adaptPlayer(player);
-				job.world = ForgeAdapter.adapt(player.getLevel());
+				job.level = player.serverLevel();
+				job.actor = FabricAdapter.adaptPlayer(player);
+				job.world = FabricAdapter.adapt(player.serverLevel());
 				job.session = SchematicBrush.worldEdit.getSessionManager().get(job.actor);
 				job.editSession = job.session.createEditSession(job.actor);
 		        job.loadPending();
 		        job.pendingf.delete();
 				sb.addJob(job);
 			} catch (IOException iox) {
-				source.sendFailure(new TextComponent("Error reading schapplyall.txt"));
-				return 1;				
+				source.sendFailure(Component.literal("Error reading schapplyall.txt"));
+				return 1;
 			}
-			source.sendSuccess(new TextComponent("Migrate started"), true);
+			source.sendSuccess(() -> Component.literal("Migrate started"), true);
 		} else {
-			source.sendFailure(new TextComponent("Cannot be used by console"));
+			source.sendFailure(Component.literal("Cannot be used by console"));
 		}
-		
+
 		return 1;
 	}
 	public static class ApplyAllJob implements Callable<Boolean> {
@@ -198,7 +193,8 @@ public class SCHMIGRATECommand {
 		Actor actor;
 		ServerPlayer player;
 		boolean doMove = true;
-		
+
+		@SuppressWarnings("static-access")
 		@Override
 		public Boolean call() throws Exception {
 			while (idx < recs.size()) {
@@ -216,7 +212,7 @@ public class SCHMIGRATECommand {
 				pendingf.delete();
 	            String msg = "Done!";
 	            SchematicBrush.log.info(msg);
-	            actor.print(msg);	        	
+	            actor.printInfo(TextComponent.of(msg));
 				return Boolean.FALSE;
 			}
 			SchRecord rec = recs.get(idx);
@@ -228,7 +224,8 @@ public class SCHMIGRATECommand {
 				int maxz = ((rec.maxZ + 15) & 0xFFFFFFF0);
 				for (int x = minx; x <= maxx; x += 16) {
 					for (int z = minz; z <= maxz; z += 16) {
-					   ChunkAccess access = level.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true);
+					   @SuppressWarnings("unused")
+						 ChunkAccess access = level.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true);
 					}
 				}
 				doMove = false;
@@ -238,14 +235,14 @@ public class SCHMIGRATECommand {
 				doMove = true;
 				idx++;
 			}
-			
+
 			LocalConfiguration config = SchematicBrush.worldEdit.getConfiguration();
 
 	        File dir = SchematicBrush.worldEdit.getWorkingDirectoryPath(config.saveDir).toFile();
 
 	        ClipboardFormat format = ClipboardFormats.findByAlias("schem");
 	        if (format == null) {
-				actor.print("Format error");
+				actor.printInfo(TextComponent.of("Format error"));
 	            return Boolean.FALSE;
 	        }
 
@@ -264,12 +261,12 @@ public class SCHMIGRATECommand {
 			RegionSelector rsel = session.getRegionSelector(world);
 			rsel.clear();
 			rsel.selectPrimary(BlockVector3.at(rec.minX, rec.minY, rec.minZ), PermissiveSelectorLimits.getInstance());
-			rsel.selectSecondary(BlockVector3.at(rec.maxX, rec.maxY, rec.maxZ), PermissiveSelectorLimits.getInstance());	
+			rsel.selectSecondary(BlockVector3.at(rec.maxX, rec.maxY, rec.maxZ), PermissiveSelectorLimits.getInstance());
 			rsel.learnChanges();
 			Region region = rsel.getRegion();
 	        BlockArrayClipboard cb = new BlockArrayClipboard(region);
 	        cb.setOrigin(BlockVector3.at(rec.originX, rec.originY, rec.originZ));
-	        
+
 	        ForwardExtentCopy copy = new ForwardExtentCopy(editSession, region, cb, region.getMinimumPoint());
 	        copy.setCopyingEntities(false);
 	        Operations.completeLegacy(copy);
@@ -279,11 +276,11 @@ public class SCHMIGRATECommand {
 		        for (int y = rec.minY; (empty) && (y <= rec.maxY); y++) {
 			        for (int z = rec.minZ; (empty) && (z <= rec.maxZ); z++) {
 			        	BlockState bs = cb.getBlock(BlockVector3.at(x,  y, z));
-			        	if (!bs.getBlockType().getId().equals("minecraft:air")) {
+			        	if (!bs.getBlockType().id().equals("minecraft:air")) {
 			        		empty = false;
 			        	}
 			        }
-		        }			        	
+		        }
 	        }
 	        ClipboardHolder holder = new ClipboardHolder(cb);
 	        session.setClipboard(holder);
@@ -296,17 +293,17 @@ public class SCHMIGRATECommand {
 	                writer.write(cb);
 	            } catch (IOException e) {
 	                f.delete();
-					actor.print("Schematic save error - " + e.getMessage());
+					actor.printInfo(TextComponent.of("Schematic save error - " + e.getMessage()));
 					return Boolean.FALSE;
 	            }
 	            String msg = String.format("Wrote %s (%d bytes)", f.getAbsolutePath(), f.length());
 	            SchematicBrush.log.info(msg);
-	            actor.print(msg);
+	            actor.printInfo(TextComponent.of(msg));
 	        }
 	        else {
 	            String msg = String.format("Empty clipboard for %s - skipped", f.getAbsolutePath());
 	            SchematicBrush.log.info(msg);
-	            actor.print(msg);	        	
+	            actor.printInfo(TextComponent.of(msg));
 	            saveSkipped(rec.fname);
 	        }
             savePending();
@@ -318,7 +315,7 @@ public class SCHMIGRATECommand {
 			try (BufferedReader br = new BufferedReader(new FileReader(pendingf))) {
 			    String line = br.readLine(); // Only one line
 			    idx = Integer.parseInt(line.trim());
-				SchematicBrush.log.info("Continuing pending schmigrate");			    
+				SchematicBrush.log.info("Continuing pending schmigrate");
 			} catch (IOException iox) {
 			}
 		}
@@ -327,15 +324,13 @@ public class SCHMIGRATECommand {
 				String line = String.format("%d", idx);
 				bw.write(line);
 			} catch (IOException iox) {
-				
-			}			
-		}		
+			}
+		}
 		private void saveSkipped(String fname) {
 			try (FileWriter bw = new FileWriter(skippedf, true)) {
 				bw.write(fname + "\n");
 			} catch (IOException iox) {
-				
-			}			
-		}		
+			}
+		}
 	}
 }

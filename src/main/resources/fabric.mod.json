@@ -1,0 +1,32 @@
+{
+	"schemaVersion": 1,
+	"id": "schematicbrush",
+	"version": "${version}",
+	"name": "SchematicBrush",
+	"description": "This mod provides tools for WorldEdit for using schematics as brushes",
+	"authors": [
+		"mikeprimm", "Emoticone11"
+	],
+	"contact": {
+		"homepage": "https://www.westeroscraft.com/",
+		"sources": "https://github.com/WesterosCraft/SchematicBrush"
+	},
+	"license": "Apache-2.0",
+	"icon": "assets/schematicbrush/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.westeroscraft.schematicbrush.SchematicBrush"
+		]
+	},
+	"mixins": [
+		"schematicbrush.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.18.2",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*",
+		"worldedit": "*"
+	}
+}

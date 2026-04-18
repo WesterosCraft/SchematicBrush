@@ -1,8 +1,6 @@
 package com.westeroscraft.schematicbrush;
 
-import java.util.List;
 import java.util.Random;
-import java.util.ArrayList;
 import java.util.regex.Pattern;
 
 import com.google.gson.annotations.SerializedName;
