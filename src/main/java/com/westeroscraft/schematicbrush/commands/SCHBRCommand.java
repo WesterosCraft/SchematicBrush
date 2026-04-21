@@ -13,6 +13,7 @@ import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.entity.Player;
 import com.sk89q.worldedit.util.formatting.text.TextComponent;
 import com.sk89q.worldedit.util.HandSide;
+import com.sk89q.worldedit.command.tool.BrushTool;
 import com.sk89q.worldedit.command.tool.InvalidToolBindException;
 
 import com.mojang.brigadier.CommandDispatcher;
@@ -193,7 +194,14 @@ public class SCHBRCommand {
 
       // Get brush tool and set to schematic brush
       try {
-        session.forceBrush(sbi.player.getItemInHand(HandSide.MAIN_HAND).getType(), sbi, "schematicbrush.brush.use");
+        var itemType = sbi.player.getItemInHand(HandSide.MAIN_HAND).getType();
+        BrushTool brushTool = session.getBrush(itemType);
+        if (brushTool == null) {
+          brushTool = new BrushTool(sbi, "schematicbrush.brush.use");
+          session.setTool(itemType, brushTool);
+        } else {
+          brushTool.setBrush(sbi, "schematicbrush.brush.use");
+        }
         actor.printInfo(TextComponent.of("Schematic brush set"));
       } catch (InvalidToolBindException e) {
         actor.printError(TextComponent.of(e.getMessage()));
