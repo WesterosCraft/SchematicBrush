@@ -174,7 +174,7 @@ public class SchematicBrush implements ModInitializer {
 	}
 
 	public File getSchemDirectory() {
-		return new File(wep.getWorkingDir().toFile(), wep.getPlatform().getConfiguration().saveDir);
+		return new File(wep.getWorkingDir().toFile(), WorldEdit.getInstance().getConfiguration().saveDir);
 	}
 
 	private static class ConfigNotFoundException extends Exception {
