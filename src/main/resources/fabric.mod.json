@@ -12,7 +12,7 @@
 		"sources": "https://github.com/WesterosCraft/SchematicBrush"
 	},
 	"license": "Apache-2.0",
-	"icon": "assets/schematicbrush/icon.png",
+	"icon": "assets/schematicbrush/icon.jpg",
 	"environment": "*",
 	"entrypoints": {
 		"main": [

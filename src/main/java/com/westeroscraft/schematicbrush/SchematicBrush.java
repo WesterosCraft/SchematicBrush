@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -78,8 +79,19 @@ public class SchematicBrush implements ModInitializer {
 
 	public static final String SCHEMATIC_EXT = "schem";
 
-	// Schematic tree cache - used during initialization
-	private Map<File, List<String>> treecache = new HashMap<File, List<String>>();
+	// Schematic tree cache - avoids re-walking the schematic directory on every wildcard
+	// resolution (including per-stroke brush use). Entries expire after TREECACHE_TTL_MS so
+	// newly added schematic files become available without a server restart.
+	private static final long TREECACHE_TTL_MS = 10000;
+	private static class TreeCacheEntry {
+		final List<String> files;
+		final long timestamp;
+		TreeCacheEntry(List<String> files, long timestamp) {
+			this.files = files;
+			this.timestamp = timestamp;
+		}
+	}
+	private final Map<File, TreeCacheEntry> treecache = new ConcurrentHashMap<File, TreeCacheEntry>();
 
 	private static final Random rnd = new Random();
 
@@ -106,7 +118,6 @@ public class SchematicBrush implements ModInitializer {
 
 		// Register ourselves for server and other game events we are interested in
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-			// SCHMIGRATECommand.register(this, dispatcher);
 			SCHBRCommand.register(this, dispatcher);
 			SCHSETCommand.register(this, dispatcher);
 			SCHLISTCommand.register(this, dispatcher);
@@ -159,9 +170,6 @@ public class SchematicBrush implements ModInitializer {
 			}
 			loadSchematicSets(config);
 			log.info("Schemsets initialized");
-
-			// Disable cache
-			treecache = null;
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -281,6 +289,9 @@ public class SchematicBrush implements ModInitializer {
 	 */
 	private void buildTree(File dir, List<String> rslt, String path) {
 		File[] lst = dir.listFiles();
+		if (lst == null) { // Not a directory, or I/O error
+			return;
+		}
 		for (File f : lst) {
 			String n = (path == null) ? f.getName() : (path + "/" + f.getName());
 			if (f.isDirectory()) {
@@ -303,18 +314,18 @@ public class SchematicBrush implements ModInitializer {
 	private void getMatchingFiles(List<String> rslt, File dir, final Pattern p, final String path) {
 		List<String> flist = null;
 
-		// See if cached
-		if (treecache != null) {
-			flist = treecache.get(dir);
+		// Use the cached file tree if present and still fresh
+		TreeCacheEntry entry = treecache.get(dir);
+		long now = System.currentTimeMillis();
+		if ((entry != null) && ((now - entry.timestamp) < TREECACHE_TTL_MS)) {
+			flist = entry.files;
 		}
 
-		// If not cached or dir not in treecache, recursively find all files in tree
+		// If not cached or expired, recursively rebuild the file tree
 		if (flist == null) {
 			flist = new ArrayList<String>();
 			buildTree(dir, flist, null);
-			if (treecache != null) {
-				treecache.put(dir, flist);
-			}
+			treecache.put(dir, new TreeCacheEntry(flist, now));
 		}
 
 		// Select all matching files
@@ -423,16 +434,22 @@ public class SchematicBrush implements ModInitializer {
 				Clipboard cc = reader.read();
 				if (cc != null) {
 					Region reg = cc.getRegion();
-					int minY = reg.getHeight() - 1;
+					BlockVector3 regMin = reg.getMinimumPoint();
+					// Find the offset (from the bottom of the region) of the lowest layer that
+					// contains a non-air block - used to anchor DROP placement to the ground.
+					int minY = -1;
 					for (int y = 0; (minY == -1) && (y < reg.getHeight()); y++) {
 						for (int x = 0; (minY == -1) && (x < reg.getWidth()); x++) {
 							for (int z = 0; (minY == -1) && (z < reg.getLength()); z++) {
-								if (cc.getBlock(BlockVector3.at(x, y, z)) != null) {
+								if (!cc.getBlock(regMin.add(x, y, z)).getBlockType().id().equals("minecraft:air")) {
 									minY = y;
 									break;
 								}
 							}
 						}
+					}
+					if (minY == -1) { // Entirely air - fall back to bottom
+						minY = 0;
 					}
 					bottomY[0] = minY;
 					sess.setClipboard(new ClipboardHolder(cc));

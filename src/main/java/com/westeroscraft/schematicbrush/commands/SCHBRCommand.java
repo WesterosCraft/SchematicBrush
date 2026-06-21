@@ -7,6 +7,7 @@ import com.westeroscraft.schematicbrush.SchematicDef.Placement;
 import com.westeroscraft.schematicbrush.SchematicSet;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.extension.platform.Actor;
@@ -18,7 +19,6 @@ import com.sk89q.worldedit.command.tool.InvalidToolBindException;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -27,186 +27,138 @@ import net.minecraft.commands.Commands;
 public class SCHBRCommand {
 	private static SchematicBrush sb;
 
-  /*
-   * This is super ugly because Mojang's brigadier library doesn't have good support for optional flags.
-   * So we need to account for the 16 following possibilities:
-   *
-   * <none>
-   * -incair
-   * -incair -replaceall
-   * -incair -replaceall -yoff
-   * -incair -replaceall -yoff -place
-   * -incair -replaceall -place
-   * -incair -yoff
-   * -incair -yoff -place
-   * -incair -place
-   * -replaceall
-   * -replaceall -yoff
-   * -replaceall -yoff -place
-   * -replaceall -place
-   * -yoff
-   * -yoff -place
-   * -place
-   */
+	/*
+	 * Register the /schbr command. Flags and schematic specs are passed as a single greedy
+	 * string and parsed in schBr(), so flags may appear in any order:
+	 *
+	 *   /schbr [-incair] [-replaceall] [-yoff <n>] [-place <center|bottom|drop>] <schematic...|&set>
+	 */
 	public static void register(SchematicBrush mod, CommandDispatcher<CommandSourceStack> source) {
 		sb = mod;
-    SchematicSuggestionProvider suggestedSchematics = new SchematicSuggestionProvider(sb, true);
+		SchematicSuggestionProvider suggestedSchematics = new SchematicSuggestionProvider(sb, true);
 		SchematicBrush.log.info("Register schbr");
 
-    source.register(Commands.literal("schbr")
-      .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-        .executes(ctx -> schBr(false, false, 0, null,
-                               StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-      .then(Commands.literal("-incair")
-        .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-          .executes(ctx -> schBr(true, false, 0, null,
-                                 StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-        .then(Commands.literal("-replaceall")
-          .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-            .executes(ctx -> schBr(true, true, 0, null,
-                                   StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-          .then(Commands.literal("-yoff")
-            .then(Commands.argument("yoff", IntegerArgumentType.integer())
-              .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-                .executes(ctx -> schBr(true, true, IntegerArgumentType.getInteger(ctx, "yoff"), null,
-                                       StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-              .then(Commands.literal("-place")
-                .then(Commands.argument("place", StringArgumentType.word())
-                  .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-                    .executes(ctx -> schBr(true, true, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
-                                           StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
-          .then(Commands.literal("-place")
-            .then(Commands.argument("place", StringArgumentType.word())
-              .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-                .executes(ctx -> schBr(true, true, 0, StringArgumentType.getString(ctx, "place"),
-                                       StringArgumentType.getString(ctx, "args"), ctx.getSource()))))))
-        .then(Commands.literal("-yoff")
-          .then(Commands.argument("yoff", IntegerArgumentType.integer())
-            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-              .executes(ctx -> schBr(true, false, IntegerArgumentType.getInteger(ctx, "yoff"), null,
-                                     StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-            .then(Commands.literal("-place")
-              .then(Commands.argument("place", StringArgumentType.word())
-                .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-                  .executes(ctx -> schBr(true, false, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
-                                         StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
-        .then(Commands.literal("-place")
-          .then(Commands.argument("place", StringArgumentType.word())
-            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-              .executes(ctx -> schBr(true, false, 0, StringArgumentType.getString(ctx, "place"),
-                                     StringArgumentType.getString(ctx, "args"), ctx.getSource()))))))
-      .then(Commands.literal("-replaceall")
-        .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-          .executes(ctx -> schBr(false, true, 0, null,
-                                 StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-        .then(Commands.literal("-yoff")
-          .then(Commands.argument("yoff", IntegerArgumentType.integer())
-            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-              .executes(ctx -> schBr(false, true, IntegerArgumentType.getInteger(ctx, "yoff"), null,
-                                     StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-            .then(Commands.literal("-place")
-              .then(Commands.argument("place", StringArgumentType.word())
-                .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-                  .executes(ctx -> schBr(false, true, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
-                                         StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
-        .then(Commands.literal("-place")
-          .then(Commands.argument("place", StringArgumentType.word())
-            .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-              .executes(ctx -> schBr(false, true, 0, StringArgumentType.getString(ctx, "place"),
-                                     StringArgumentType.getString(ctx, "args"), ctx.getSource()))))))
-      .then(Commands.literal("-yoff")
-        .then(Commands.argument("yoff", IntegerArgumentType.integer())
-          .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-            .executes(ctx -> schBr(false, false, IntegerArgumentType.getInteger(ctx, "yoff"), null,
-                                   StringArgumentType.getString(ctx, "args"), ctx.getSource())))
-          .then(Commands.literal("-place")
-            .then(Commands.argument("place", StringArgumentType.word())
-              .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-                .executes(ctx -> schBr(false, false, IntegerArgumentType.getInteger(ctx, "yoff"), StringArgumentType.getString(ctx, "place"),
-                                       StringArgumentType.getString(ctx, "args"), ctx.getSource())))))))
-      .then(Commands.literal("-place")
-        .then(Commands.argument("place", StringArgumentType.word())
-          .then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
-            .executes(ctx -> schBr(false, false, 0, StringArgumentType.getString(ctx, "place"),
-                                   StringArgumentType.getString(ctx, "args"), ctx.getSource()))))));
+		source.register(Commands.literal("schbr")
+			.then(Commands.argument("args", StringArgumentType.greedyString()).suggests(suggestedSchematics)
+				.executes(ctx -> schBr(StringArgumentType.getString(ctx, "args"), ctx.getSource()))));
 	}
 
-  /*
-   * Apply the schembrush to a WorldEdit brush.
-   */
-  @SuppressWarnings("static-access")
-	public static int schBr(boolean incair, boolean replaceall, int yoff, String place, String args, CommandSourceStack source) {
-    Actor actor = sb.validateActor(source, "schematicbrush.brush.use");
-    if (actor != null) {
+	/*
+	 * Apply the schembrush to a WorldEdit brush.
+	 */
+	@SuppressWarnings("static-access")
+	public static int schBr(String args, CommandSourceStack source) {
+		Actor actor = sb.validateActor(source, "schematicbrush.brush.use");
+		if (actor == null) {
+			return 1;
+		}
 
-      String[] schemids = args.split(" ");
-      SchematicSet ss = null;
+		// Parse leading flags in any order, stopping at the first schematic spec
+		boolean incair = false;
+		boolean replaceall = false;
+		int yoff = 0;
+		Placement placement = Placement.CENTER;
 
-      // Single set ID
-      if ((schemids.length == 1) && schemids[0].startsWith("&")) {
-        String setid = schemids[0].substring(1);
-        ss = sb.sets.get(setid);
-        if (ss == null) {
-          actor.printError(TextComponent.of("Schematic set '" + setid + "' not found"));
-          return 1;
-        }
-      }
-      // Otherwise, list of schematics
-      else if (schemids.length >= 1) {
-        ArrayList<SchematicDef> defs = new ArrayList<SchematicDef>();
-        for (int i = 0; i < schemids.length; i++) {
-          if (schemids[i].startsWith("&")) {
-            actor.printError(TextComponent.of("Mixing multiple schemsets with individual schematics is currently unsupported"));
-            return 1;
-          }
-          SchematicDef def = SchematicDef.parseSchematic(schemids[i]);
-          if ((def == null) || !sb.validateSchematicDef(actor, def)) {
-            actor.printError(TextComponent.of("Invalid schematic definition: " + schemids[i]));
-            return 1;
-          }
-          defs.add(def);
-        }
-        ss = new SchematicSet(null, null, defs);
-      }
+		String[] toks = args.trim().split("\\s+");
+		int i = 0;
+		for (; i < toks.length; i++) {
+			String tok = toks[i];
+			if (tok.equals("-incair")) {
+				incair = true;
+			} else if (tok.equals("-replaceall")) {
+				replaceall = true;
+			} else if (tok.equals("-yoff")) {
+				if ((i + 1) >= toks.length) {
+					actor.printError(TextComponent.of("-yoff requires a numeric value"));
+					return 1;
+				}
+				try {
+					yoff = Integer.parseInt(toks[++i]);
+				} catch (NumberFormatException nfx) {
+					actor.printError(TextComponent.of("Invalid -yoff value: " + toks[i]));
+					return 1;
+				}
+			} else if (tok.equals("-place")) {
+				if ((i + 1) >= toks.length) {
+					actor.printError(TextComponent.of("-place requires a value (center, bottom, or drop)"));
+					return 1;
+				}
+				String pval = toks[++i].toUpperCase();
+				try {
+					placement = Placement.valueOf(pval);
+				} catch (IllegalArgumentException iax) {
+					placement = Placement.CENTER;
+					actor.printError(TextComponent.of("Bad place value (" + pval + ") - using CENTER"));
+				}
+			} else if (tok.startsWith("-")) {
+				actor.printError(TextComponent.of("Unknown flag: " + tok));
+				return 1;
+			} else {
+				break; // First non-flag token - start of schematic specs
+			}
+		}
 
-      // Parse placement flag if given
-      Placement placement = Placement.CENTER;
-      if (place != null) {
-        String pval = place.toUpperCase();
-        placement = Placement.valueOf(pval);
-        if (placement == null) {
-          placement = Placement.CENTER;
-          actor.printError(TextComponent.of("Bad place value (" + pval + ") - using CENTER"));
-        }
-      }
+		// Remaining tokens are the schematic specs / set reference
+		if (i >= toks.length) {
+			actor.printError(TextComponent.of("No schematic or schematic set specified"));
+			return 1;
+		}
+		String[] schemids = Arrays.copyOfRange(toks, i, toks.length);
 
-      // Connect to WorldEdit session
-      LocalSession session = sb.worldEdit.getSessionManager().get(actor);
+		SchematicSet ss = null;
 
-      // Initialize schematic brush instance
-      SchematicBrushInstance sbi = new SchematicBrushInstance(sb);
-      sbi.set = ss;
-      sbi.player = (Player) actor;
-      sbi.skipair = !incair;
-      sbi.replaceall = replaceall;
-      sbi.yoff = yoff;
-      sbi.place = placement;
+		// Single set ID
+		if ((schemids.length == 1) && schemids[0].startsWith("&")) {
+			String setid = schemids[0].substring(1);
+			ss = sb.sets.get(setid);
+			if (ss == null) {
+				actor.printError(TextComponent.of("Schematic set '" + setid + "' not found - '&' is only for sets created with /schset; for a single schematic, omit the '&'"));
+				return 1;
+			}
+		}
+		// Otherwise, list of schematics
+		else {
+			ArrayList<SchematicDef> defs = new ArrayList<SchematicDef>();
+			for (int j = 0; j < schemids.length; j++) {
+				if (schemids[j].startsWith("&")) {
+					actor.printError(TextComponent.of("Mixing multiple schemsets with individual schematics is currently unsupported"));
+					return 1;
+				}
+				SchematicDef def = SchematicDef.parseSchematic(schemids[j]);
+				if ((def == null) || !sb.validateSchematicDef(actor, def)) {
+					actor.printError(TextComponent.of("Invalid schematic definition: " + schemids[j]));
+					return 1;
+				}
+				defs.add(def);
+			}
+			ss = new SchematicSet(null, null, defs);
+		}
 
-      // Get brush tool and set to schematic brush
-      try {
-        var itemType = sbi.player.getItemInHand(HandSide.MAIN_HAND).getType();
-        BrushTool brushTool = session.getBrush(itemType);
-        if (brushTool == null) {
-          brushTool = new BrushTool(sbi, "schematicbrush.brush.use");
-          session.setTool(itemType, brushTool);
-        } else {
-          brushTool.setBrush(sbi, "schematicbrush.brush.use");
-        }
-        actor.printInfo(TextComponent.of("Schematic brush set"));
-      } catch (InvalidToolBindException e) {
-        actor.printError(TextComponent.of(e.getMessage()));
-      }
-    }
+		// Connect to WorldEdit session
+		LocalSession session = sb.worldEdit.getSessionManager().get(actor);
+
+		// Initialize schematic brush instance
+		SchematicBrushInstance sbi = new SchematicBrushInstance(sb);
+		sbi.set = ss;
+		sbi.player = (Player) actor;
+		sbi.skipair = !incair;
+		sbi.replaceall = replaceall;
+		sbi.yoff = yoff;
+		sbi.place = placement;
+
+		// Get brush tool and set to schematic brush
+		try {
+			var itemType = sbi.player.getItemInHand(HandSide.MAIN_HAND).getType();
+			BrushTool brushTool = session.getBrush(itemType);
+			if (brushTool == null) {
+				brushTool = new BrushTool("schematicbrush.brush.use");
+				session.setTool(itemType, brushTool);
+			}
+			brushTool.setBrush(sbi, "schematicbrush.brush.use");
+			actor.printInfo(TextComponent.of("Schematic brush set"));
+		} catch (InvalidToolBindException e) {
+			actor.printError(TextComponent.of(e.getMessage()));
+		}
 
 		return 1;
 	}
