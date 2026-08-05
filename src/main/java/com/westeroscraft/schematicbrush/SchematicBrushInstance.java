@@ -9,6 +9,8 @@ import com.sk89q.worldedit.command.tool.brush.Brush;
 import com.sk89q.worldedit.LocalSession;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.EmptyClipboardException;
+import com.sk89q.worldedit.extent.Extent;
+import com.sk89q.worldedit.extent.MaskingExtent;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.session.ClipboardHolder;
@@ -103,10 +105,15 @@ public class SchematicBrushInstance implements Brush {
     ppos = trans.apply(ppos.toVector3()).toBlockPoint();
     ppos = pos.subtract(ppos);
 
+    // Restrict this paste to air destinations without mutating the shared EditSession
+    // mask, since FAWE's async chunk processing can be concurrently reading/mutating
+    // that shared mask state (races with e.g. a recent undo or other nearby edit that
+    // hasn't finished flushing), which was causing random blocks to be dropped.
+    Extent pasteTarget = editsession;
     if (!replaceall) {
-      editsession.setMask(new BlockTypeMask(editsession, BlockTypes.AIR));
+      pasteTarget = new MaskingExtent(editsession, new BlockTypeMask(editsession, BlockTypes.AIR));
     }
-    PasteBuilder pb = cliph.createPaste(editsession).to(ppos)
+    PasteBuilder pb = cliph.createPaste(pasteTarget).to(ppos)
         .ignoreAirBlocks(skipair);
     Operations.completeLegacy(pb.build());
     player.printInfo(TextComponent.of("Applied '" + schfilename + "', flip=" + flip.name() + ", rot="
